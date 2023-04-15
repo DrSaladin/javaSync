@@ -1,16 +1,21 @@
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public class Main {
   public static Map<Integer, Integer> sizeToFreq = new HashMap<>();
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws InterruptedException {
     String[] routs = new String[1000];
     String letterToSearch = "R";
 
     AtomicInteger currentMaxSizeKey = new AtomicInteger();
     AtomicInteger currentMaxSizeValue = new AtomicInteger();
+
+    List<Thread> processingThreads = new ArrayList<>();
+
+    CountDownLatch latch = new CountDownLatch(routs.length);
 
     for (int i = 0; i < routs.length; i++) {
       routs[i] = generateRoute("RLRFR", 100);
@@ -43,25 +48,20 @@ public class Main {
             currentMaxSizeKey.notify();
           }
         }
-      };
 
-      Runnable searchLargestLogic = () -> {
-          synchronized (currentMaxSizeKey) {
-          try {
-            currentMaxSizeKey.wait();
-            System.out.println("Текущий лидер: " + currentMaxSizeKey);
-          } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-          }
-        }
+        latch.countDown();
       };
 
       Thread processingThread = new Thread(processingLogic);
-      Thread searchLargestThread = new Thread(searchLargestLogic);
       processingThread.start();
-      searchLargestThread.start();
+      processingThreads.add(processingThread);
     }
 
+    for (Thread thread : processingThreads) {
+      thread.join();
+    }
+
+    latch.await();
     sizeToFreq = sizeToFreq.entrySet().stream()
       .sorted(Map.Entry.<Integer, Integer>comparingByValue().reversed())
       .collect(Collectors.toMap(
